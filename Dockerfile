@@ -1,10 +1,18 @@
 FROM ghcr.io/astral-sh/uv:bookworm-slim
 
-# Copy the project into the image
-ADD . /app
+# Install build tools required for httptools / uvicorn
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Sync the project into a new environment, asserting the lockfile is up to date
+# Copy the project
+ADD . /app
 WORKDIR /app
+
+# Install dependencies
 RUN uv sync --locked
 
+# Start proxy
 CMD ["uv", "run", "start_proxy.py"]
