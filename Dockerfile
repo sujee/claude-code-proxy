@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the project
+# Copy the project into the image
 ADD . /app
-WORKDIR /app
 
-# Install dependencies
+# Sync the project into a new environment, asserting the lockfile is up to date
+WORKDIR /app
 RUN uv sync --locked
 
 # Start proxy
