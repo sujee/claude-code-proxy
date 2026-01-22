@@ -1,21 +1,42 @@
-# Claude Code Proxy
+# Claude Code Proxy - Nebius Edition
 
-A proxy server that enables **Claude Code** to work with OpenAI-compatible API providers. Convert Claude API requests to OpenAI API calls, allowing you to use various LLM providers through the Claude Code CLI.
+A specialized proxy server that enables **Claude Code** to work seamlessly with **Nebius** token factory. This proxy is specifically designed and tested for Nebius AI services, converting Claude API requests to OpenAI-compatible API calls, allowing you to use Nebius LLM providers through the Claude Code CLI.
+
+> **Note**: This proxy is optimized for Nebius token factory and has been thoroughly tested with Nebius infrastructure. While it may work with other OpenAI-compatible providers, the primary focus and validation is on Nebius compatibility.
 
 ![Claude Code Proxy](demo.png)
 
 ## Features
 
-- **Full Claude API Compatibility**: Complete `/v1/messages` endpoint support
-- **Multiple Provider Support**: OpenAI, Azure OpenAI, local models (Ollama), and any OpenAI-compatible API
-- **Smart Model Mapping**: Configure BIG and SMALL models via environment variables
-- **Function Calling**: Complete tool use support with proper conversion
-- **Streaming Responses**: Real-time SSE streaming support
-- **Image Support**: Base64 encoded image input
-- **Custom Headers**: Automatic injection of custom HTTP headers for API requests
-- **Error Handling**: Comprehensive error handling and logging
+- **Nebius Optimized**: Specifically designed and tested for Nebius token factory infrastructure
+- **Full Claude API Compatibility**: Complete `/v1/messages` endpoint support with proper Nebius adaptations
+- **Smart Model Mapping**: Configure models via environment variables optimized for Nebius model offerings
+- **Function Calling**: Complete tool use support with Nebius-compatible conversion
+- **Streaming Responses**: Real-time SSE streaming support for Nebius endpoints
+- **🆕 Image Support**: Full support for base64 encoded image inputs with automatic model routing to vision-capable models
+- **Custom Headers**: Automatic injection of Nebius-specific HTTP headers for API requests
+- **Error Handling**: Comprehensive error handling optimized for Nebius error responses
+- **Robust Testing**: Rigorous test coverage including image model functionality
 
-## Quick Start
+### 🆕 Image Support Feature
+
+The proxy now supports image inputs in Claude API requests. When images are detected in messages, the system automatically:
+
+1. **Detects Image Content**: Scans message content for base64 encoded images
+2. **Routes to Vision Model**: Automatically switches to the configured `IMAGE_MODEL` (default: `mistralai/pixtral-12b-2409`)
+3. **Maintains Context**: Preserves text context alongside image data
+4. **Returns Structured Responses**: Processes image inputs and returns appropriate text responses
+
+```bash
+# Example image model configuration
+VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"  # Nebius multi-modal vision model
+# Optional: Strip image context for non-vision models
+STRIP_IMAGE_CONTEXT=true
+```
+
+The image support has been **succesfully tested** with the provided test suite, confirming the proxy's ability to handle image-based requests properly.
+
+## Quick Start (Nebius Configuration)
 
 ### 1. Install Dependencies
 
@@ -27,12 +48,23 @@ uv sync
 pip install -r requirements.txt
 ```
 
-### 2. Configure
+### 2. Configure for Nebius
 
 ```bash
 cp .env.example .env
-# Edit .env and add your API configuration
+# Edit .env with your Nebius configuration
 # Note: Environment variables are automatically loaded from .env file
+
+# Required Nebius settings
+OPENAI_API_KEY="your-nebius-api-key"
+OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
+
+# Optional: Customize Nebius models (default values provided)
+BIG_MODEL="zai-org/GLM-4.5"
+MIDDLE_MODEL="zai-org/GLM-4.5"
+SMALL_MODEL="zai-org/GLM-4.5"
+VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"
+STRIP_IMAGE_CONTEXT=true
 ```
 
 ### 3. Start Server
@@ -66,7 +98,7 @@ The application automatically loads environment variables from a `.env` file in 
 
 **Required:**
 
-- `OPENAI_API_KEY` - Your API key for the target provider
+- `OPENAI_API_KEY` - Your Nebius API key for the token factory
 
 **Security:**
 
@@ -76,13 +108,15 @@ The application automatically loads environment variables from a `.env` file in 
 
 **Model Configuration:**
 
-- `BIG_MODEL` - Model for Claude opus requests (default: `gpt-4o`)
-- `MIDDLE_MODEL` - Model for Claude opus requests (default: `gpt-4o`)
-- `SMALL_MODEL` - Model for Claude haiku requests (default: `gpt-4o-mini`)
+- `BIG_MODEL` - Model for Claude opus requests (default: `zai-org/GLM-4.5`)
+- `MIDDLE_MODEL` - Model for Claude sonnet requests (default: `zai-org/GLM-4.5`)
+- `SMALL_MODEL` - Model for Claude haiku requests (default: `zai-org/GLM-4.5`)
+- `VISION_MODEL` - Model for vision/image requests (default: `Qwen/Qwen2.5-VL-72B-Instruct`)
+- `STRIP_IMAGE_CONTEXT` - Strips image context from non-vision models (default: `true`)
 
 **API Configuration:**
 
-- `OPENAI_BASE_URL` - API base URL (default: `https://api.openai.com/v1`)
+- `OPENAI_BASE_URL` - API base URL (default: `https://api.tokenfactory.nebius.com/v1`) - Optimized for Nebius token factory
 
 **Server Settings:**
 
@@ -154,26 +188,29 @@ CUSTOM_HEADER_AUTHORIZATION="Bearer my-token"
 
 The proxy will automatically include these headers in all API requests to the target LLM provider.
 
-### Model Mapping
+### Model Mapping (Nebius Optimized)
 
-The proxy maps Claude model requests to your configured models:
+The proxy maps Claude model requests to Nebius-compatible models:
 
-| Claude Request       | Mapped To      | Environment Variable   |
-| -------------------- | -------------- | ---------------------- |
-| Models with "haiku"  | `SMALL_MODEL`  | Default: `gpt-4o-mini` |
-| Models with "sonnet" | `MIDDLE_MODEL` | Default: `BIG_MODEL`   |
-| Models with "opus"   | `BIG_MODEL`    | Default: `gpt-4o`      |
+| Claude Request          | Mapped To      | Environment Variable            | Nebius Default                          |
+| ---------------------- | -------------- | ------------------------------ | --------------------------------------- |
+| Models with "haiku"    | `SMALL_MODEL`  | `zai-org/GLM-4.5`              | High-quality text generation            |
+| Models with "sonnet"   | `MIDDLE_MODEL` | `zai-org/GLM-4.5`              | Balanced performance and quality        |
+| Models with "opus"     | `BIG_MODEL`    | `zai-org/GLM-4.5`              | Highest quality, complex reasoning      |
+| **Requests with images** | `VISION_MODEL` | `Qwen/Qwen2.5-VL-72B-Instruct` | **🆕 Multi-modal vision model**        |
 
 ### Provider Examples
 
-#### OpenAI
+#### Nebius Token Factory (Recommended)
 
 ```bash
-OPENAI_API_KEY="sk-your-openai-key"
-OPENAI_BASE_URL="https://api.openai.com/v1"
-BIG_MODEL="gpt-4o"
-MIDDLE_MODEL="gpt-4o"
-SMALL_MODEL="gpt-4o-mini"
+OPENAI_API_KEY="your-nebius-api-key"
+OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
+BIG_MODEL="zai-org/GLM-4.5"
+MIDDLE_MODEL="zai-org/GLM-4.5"
+SMALL_MODEL="zai-org/GLM-4.5"
+VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"
+STRIP_IMAGE_CONTEXT=true
 ```
 
 #### Azure OpenAI
@@ -237,12 +274,21 @@ claude
 
 ## Testing
 
-Test proxy functionality:
+The proxy includes comprehensive testing specifically designed for Nebius infrastructure:
 
 ```bash
-# Run comprehensive tests
+# Run comprehensive Nebius-focused tests
 python src/test_claude_to_openai.py
 ```
+
+### Test Coverage
+
+- **Nebius API Compatibility**: Verified with Nebius token factory endpoints
+- **Model Mapping**: All model routing tested with Nebius model offerings
+- **Image Support**: Successfully tested with base64 encoded images using `Qwen/Qwen2.5-VL-72B-Instruct`
+- **Function Calling**: Tool use compatibility verified with Nebius inference services
+- **Error Handling**: Nebius-specific error response handling tested
+- **Streaming**: Real-time response streaming validated with Nebius endpoints
 
 ## Development
 
@@ -283,6 +329,10 @@ claude-code-proxy/
 - **Streaming support** for real-time responses
 - **Configurable timeouts** and retries
 - **Smart error handling** with detailed logging
+
+## Nebius Disclaimer
+
+> **Important**: This proxy is optimized specifically for Nebius token factory infrastructure. While it maintains compatibility with other OpenAI-compatible providers, all testing, validation, and optimizations are performed with Nebius endpoints. For best results, use with Nebius AI services.
 
 ## License
 
