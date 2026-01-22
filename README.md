@@ -1,8 +1,10 @@
 # Claude Code Proxy - Nebius Edition
 
-A specialized proxy server that enables **Claude Code** to work seamlessly with **Nebius** token factory. This proxy is specifically designed and tested for Nebius AI services, converting Claude API requests to OpenAI-compatible API calls, allowing you to use Nebius LLM providers through the Claude Code CLI.
+A specialized proxy server that enables **Claude Code** to work seamlessly with **Nebius** token factory. This proxy is exclusively designed and tested for Nebius AI services, converting Claude API requests to Nebius-compatible API calls, allowing you to use Nebius LLM providers through the Claude Code CLI.
 
-> **Note**: This proxy is optimized for Nebius token factory and has been thoroughly tested with Nebius infrastructure. While it may work with other OpenAI-compatible providers, the primary focus and validation is on Nebius compatibility.
+**Based on original work by [holegots](https://github.com/holegots)** - This project has been extensively customized and optimized exclusively for Nebius token factory infrastructure.
+
+> **Important**: This proxy is built exclusively for Nebius token factory. All development, testing, and optimization is focused entirely on Nebius infrastructure.
 
 ![Claude Code Proxy](demo.png)
 
@@ -213,29 +215,6 @@ VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"
 STRIP_IMAGE_CONTEXT=true
 ```
 
-#### Azure OpenAI
-
-```bash
-OPENAI_API_KEY="your-azure-key"
-OPENAI_BASE_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment"
-BIG_MODEL="gpt-4"
-MIDDLE_MODEL="gpt-4"
-SMALL_MODEL="gpt-35-turbo"
-```
-
-#### Local Models (Ollama)
-
-```bash
-OPENAI_API_KEY="dummy-key"  # Required but can be dummy
-OPENAI_BASE_URL="http://localhost:11434/v1"
-BIG_MODEL="llama3.1:70b"
-MIDDLE_MODEL="llama3.1:70b"
-SMALL_MODEL="llama3.1:8b"
-```
-
-#### Other Providers
-
-Any OpenAI-compatible API can be used by setting the appropriate `OPENAI_BASE_URL`.
 
 ## Usage Examples
 
@@ -332,7 +311,7 @@ claude-code-proxy/
 
 ## Nebius Disclaimer
 
-> **Important**: This proxy is optimized specifically for Nebius token factory infrastructure. While it maintains compatibility with other OpenAI-compatible providers, all testing, validation, and optimizations are performed with Nebius endpoints. For best results, use with Nebius AI services.
+> **Exclusively for Nebius**: This proxy is designed and tested exclusively for Nebius token factory infrastructure. All features, testing, and optimizations are performed specifically for Nebius endpoints. This proxy is not intended for use with other providers.
 
 ## License
 

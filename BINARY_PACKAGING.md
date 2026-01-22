@@ -151,7 +151,7 @@ OPENAI_API_KEY="your-key" nohup ./claude-code-proxy &
 
 - **Memory**: Minimum 512MB RAM
 - **Storage**: Minimum 100MB available space
-- **Network**: Access to OpenAI API
+- **Network**: Access to Nebius token factory API
 - **Permissions**: No root privileges required
 
 ### Production Environment Deployment
