@@ -149,3 +149,20 @@ def test_followup_without_image_keeps_tools_and_model():
         isinstance(msg.get("content"), list) and any(part.get("type") == "image_url" for part in msg["content"])
         for msg in openai_request["messages"]
     )
+
+
+def test_requested_max_tokens_is_not_forced_up_by_min_tokens_limit(monkeypatch):
+    """MIN_TOKENS_LIMIT should only be a fallback, not an enforced floor."""
+    original_min = config.min_tokens_limit
+    try:
+        monkeypatch.setattr(config, "min_tokens_limit", 4096)
+        request = ClaudeMessagesRequest(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=64,
+            messages=[ClaudeMessage(role="user", content="hello")],
+        )
+
+        openai_request = convert_claude_to_openai(request, model_manager)
+        assert openai_request["max_tokens"] <= 64
+    finally:
+        monkeypatch.setattr(config, "min_tokens_limit", original_min)

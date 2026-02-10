@@ -25,18 +25,18 @@ A specialized proxy server that enables **Claude Code** to work seamlessly with 
 The proxy now supports image inputs in Claude API requests. When images are detected in messages, the system automatically:
 
 1. **Detects Image Content**: Scans message content for base64 encoded images
-2. **Routes to Vision Model**: Automatically switches to the configured `IMAGE_MODEL` (default: `mistralai/pixtral-12b-2409`)
+2. **Routes to Vision Model**: Automatically switches to the configured `VISION_MODEL` (default: `Qwen/Qwen2.5-VL-72B-Instruct`)
 3. **Maintains Context**: Preserves text context alongside image data
 4. **Returns Structured Responses**: Processes image inputs and returns appropriate text responses
 
 ```bash
 # Example image model configuration
 VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"  # Nebius multi-modal vision model
-# Optional: Strip image context for non-vision models
+# Optional: For image requests, control whether system context is forwarded
 STRIP_IMAGE_CONTEXT=true
 ```
 
-The image support has been **succesfully tested** with the provided test suite, confirming the proxy's ability to handle image-based requests properly.
+The image support has been **successfully tested** with the provided test suite, confirming the proxy's ability to handle image-based requests properly.
 
 ## Quick Start (Nebius Configuration)
 
@@ -76,7 +76,7 @@ STRIP_IMAGE_CONTEXT=true
 python start_proxy.py
 
 # Or with UV
-uv run claude-code-proxy
+uv run claude-code-proxy-nebius
 
 # Or with docker compose
 docker compose up -d
@@ -114,7 +114,8 @@ The application automatically loads environment variables from a `.env` file in 
 - `MIDDLE_MODEL` - Model for Claude sonnet requests (default: `zai-org/GLM-4.5`)
 - `SMALL_MODEL` - Model for Claude haiku requests (default: `zai-org/GLM-4.5`)
 - `VISION_MODEL` - Model for vision/image requests (default: `Qwen/Qwen2.5-VL-72B-Instruct`)
-- `STRIP_IMAGE_CONTEXT` - Strips image context from non-vision models (default: `true`)
+- `STRIP_IMAGE_CONTEXT` - For image requests, controls forwarding of system context to the vision model (default: `true`)
+  - Note: Image turns are always text-trimmed to protect vision context size.
 
 **API Configuration:**
 
@@ -124,12 +125,14 @@ The application automatically loads environment variables from a `.env` file in 
 
 - `HOST` - Server host (default: `0.0.0.0`)
 - `PORT` - Server port (default: `8083`)
-- `LOG_LEVEL` - Logging level (default: `WARNING`)
+- `LOG_LEVEL` - Logging level (default: `INFO`)
 
 **Performance:**
 
 - `MAX_TOKENS_LIMIT` - Token limit (default: `4096`)
+- `MIN_TOKENS_LIMIT` - Fallback token limit when request value is invalid (default: `100`)
 - `REQUEST_TIMEOUT` - Request timeout in seconds (default: `90`)
+- `MAX_RETRIES` - Retries for transient provider/API failures (default: `2`)
 
 **Custom Headers:**
 
@@ -178,8 +181,8 @@ Environment variables with the `CUSTOM_HEADER_` prefix are automatically convert
 
 ```bash
 # Basic configuration
-OPENAI_API_KEY="sk-your-openai-api-key-here"
-OPENAI_BASE_URL="https://api.openai.com/v1"
+OPENAI_API_KEY="your-nebius-api-key"
+OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
 
 # Enable custom headers (uncomment as needed)
 CUSTOM_HEADER_ACCEPT="application/jsonstream"
@@ -256,8 +259,17 @@ claude
 The proxy includes comprehensive testing specifically designed for Nebius infrastructure:
 
 ```bash
-# Run comprehensive Nebius-focused tests
-python src/test_claude_to_openai.py
+# Fast unit tests
+python -m pytest -q tests/test_request_converter.py tests/test_image_routing.py
+
+# Optional integration smoke tests (requires proxy running on :8083)
+python tests/test_main.py
+
+# Optional pytest collection for integration module
+RUN_PROXY_INTEGRATION_TESTS=1 python -m pytest -q tests/test_main.py
+
+# Direct upstream auth diagnostic (bypasses proxy conversion)
+python tests/auth_test.py
 ```
 
 ### Test Coverage
@@ -278,7 +290,7 @@ python src/test_claude_to_openai.py
 uv sync
 
 # Run server
-uv run claude-code-proxy
+uv run claude-code-proxy-nebius
 
 # Format code
 uv run black src/
@@ -294,8 +306,12 @@ uv run mypy src/
 claude-code-proxy/
 ├── src/
 │   ├── main.py                     # Main server
-│   ├── test_claude_to_openai.py    # Tests
-│   └── [other modules...]
+│   └── [api/core/conversion/models]
+├── tests/
+│   ├── test_request_converter.py   # Unit tests
+│   ├── test_image_routing.py       # Unit tests
+│   ├── test_main.py                # Optional integration script/tests
+│   └── auth_test.py                # Direct provider auth diagnostic
 ├── start_proxy.py                  # Startup script
 ├── .env.example                    # Config template
 └── README.md                       # This file

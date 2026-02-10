@@ -4,7 +4,7 @@ from datetime import datetime
 import uuid
 import json
 import os
-from typing import Optional, List
+from typing import Optional
 
 from src.core.config import config
 from src.core.logging import logger
@@ -28,6 +28,7 @@ openai_client = OpenAIClient(
     config.request_timeout,
     api_version=config.azure_api_version,
     custom_headers=custom_headers,
+    max_retries=config.max_retries,
 )
 
 async def validate_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):

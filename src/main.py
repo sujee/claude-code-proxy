@@ -13,30 +13,40 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
         print("Claude-to-OpenAI API Proxy v1.0.0")
         print("")
-        print("Usage: python src/main.py")
+        print("Usage: python start_proxy.py")
         print("")
         print("Required environment variables:")
-        print("  OPENAI_API_KEY - Your OpenAI API key")
+        print("  OPENAI_API_KEY - Your provider API key")
         print("")
         print("Optional environment variables:")
         print("  ANTHROPIC_API_KEY - Expected Anthropic API key for client validation")
         print("                      If set, clients must provide this exact API key")
         print(
-            f"  OPENAI_BASE_URL - OpenAI API base URL (default: https://api.openai.com/v1)"
+            f"  OPENAI_BASE_URL - OpenAI-compatible API base URL (default: {config.openai_base_url})"
         )
-        print(f"  BIG_MODEL - Model for opus requests (default: gpt-4o)")
-        print(f"  MIDDLE_MODEL - Model for sonnet requests (default: gpt-4o)")
-        print(f"  SMALL_MODEL - Model for haiku requests (default: gpt-4o-mini)")
-        print(f"  HOST - Server host (default: 0.0.0.0)")
-        print(f"  PORT - Server port (default: 8083)")
-        print(f"  LOG_LEVEL - Logging level (default: WARNING)")
-        print(f"  MAX_TOKENS_LIMIT - Token limit (default: 4096)")
-        print(f"  MIN_TOKENS_LIMIT - Minimum token limit (default: 100)")
-        print(f"  REQUEST_TIMEOUT - Request timeout in seconds (default: 90)")
+        print(f"  BIG_MODEL - Model for opus requests (default: {config.big_model})")
+        print(
+            f"  MIDDLE_MODEL - Model for sonnet requests (default: {config.middle_model})"
+        )
+        print(f"  SMALL_MODEL - Model for haiku requests (default: {config.small_model})")
+        print(
+            f"  VISION_MODEL - Model for image requests (default: {config.vision_model})"
+        )
+        print(f"  HOST - Server host (default: {config.host})")
+        print(f"  PORT - Server port (default: {config.port})")
+        print(f"  LOG_LEVEL - Logging level (default: {config.log_level})")
+        print(f"  MAX_TOKENS_LIMIT - Token limit (default: {config.max_tokens_limit})")
+        print(
+            f"  MIN_TOKENS_LIMIT - Fallback token limit for invalid requests (default: {config.min_tokens_limit})"
+        )
+        print(f"  REQUEST_TIMEOUT - Request timeout in seconds (default: {config.request_timeout})")
+        print(f"  MAX_RETRIES - Retry attempts for provider requests (default: {config.max_retries})")
         print("")
         print("Model mapping:")
         print(f"  Claude haiku models -> {config.small_model}")
-        print(f"  Claude sonnet/opus models -> {config.big_model}")
+        print(f"  Claude sonnet models -> {config.middle_model}")
+        print(f"  Claude opus models -> {config.big_model}")
+        print(f"  Requests with images -> {config.vision_model}")
         sys.exit(0)
 
     # Configuration summary

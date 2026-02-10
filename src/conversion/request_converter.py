@@ -1,12 +1,81 @@
 import json
-from typing import Dict, Any, List
-from venv import logger
+import math
+import logging
+from typing import Dict, Any, List, Tuple
 from src.core.constants import Constants
 from src.models.claude import ClaudeMessagesRequest, ClaudeMessage
 from src.core.config import config
-import logging
 
 logger = logging.getLogger(__name__)
+
+# Rough per-model context limits (tokens). Used to downscale max_tokens when
+# prompts get close to the window. Configurable via env overrides in config.
+# If no override is provided, we fall back to the safe default below.
+DEFAULT_CONTEXT_LIMIT = 128000
+# Bias multiplier to make the rough token estimate more conservative (actual
+# provider tokenization can be larger than chars/4). Increase to trim earlier.
+TOKEN_ESTIMATE_BIAS = 1.35
+# Extra safety buffer beyond the reserve passed to trimming.
+TOKEN_ESTIMATE_BUFFER = 512
+
+
+def _get_context_limit(model_name: str) -> int:
+    # Per-role overrides from config
+    if model_name == config.big_model and config.big_model_context_limit:
+        return config.big_model_context_limit
+    if model_name == config.middle_model and config.middle_model_context_limit:
+        return config.middle_model_context_limit
+    if model_name == config.small_model and config.small_model_context_limit:
+        return config.small_model_context_limit
+    if model_name == config.vision_model and config.vision_model_context_limit:
+        return config.vision_model_context_limit
+
+    # No prefix match; use safe default
+    return DEFAULT_CONTEXT_LIMIT
+
+
+def _estimate_prompt_tokens(messages: List[Dict[str, Any]]) -> int:
+    """Conservative token estimator: chars/4 + image bump, scaled up."""
+    total_chars = 0
+    image_bonus = 0
+    for msg in messages:
+        content = msg.get("content")
+        if content is None:
+            continue
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        total_chars += len(block.get("text", ""))
+                    elif block.get("type") == "image_url":
+                        image_bonus += 400  # conservative chunk per image
+        # assistant tool calls:
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                fn = tc.get("function", {})
+                total_chars += len(fn.get("arguments", ""))
+    rough = (total_chars // 4) + image_bonus
+    return int(math.ceil(rough * TOKEN_ESTIMATE_BIAS) + TOKEN_ESTIMATE_BUFFER)
+
+
+def _trim_messages_to_fit(messages: List[Dict[str, Any]], context_limit: int, reserve: int = 2048) -> Tuple[List[Dict[str, Any]], int]:
+    """
+    Drop oldest messages until the estimated prompt fits within context_limit - reserve.
+    Returns (trimmed_messages, dropped_count).
+    """
+    trimmed = list(messages)
+    dropped = 0
+    while trimmed:
+        est = _estimate_prompt_tokens(trimmed)
+        if est <= max(context_limit - reserve, 1):
+            break
+        # Prefer to drop the oldest non-system message first; if first is system and list has more, drop second.
+        drop_idx = 0 if len(trimmed) == 1 else (0 if trimmed[0].get("role") != Constants.ROLE_SYSTEM else 1)
+        trimmed.pop(drop_idx if drop_idx < len(trimmed) else 0)
+        dropped += 1
+    return trimmed, dropped
 
 
 def convert_claude_to_openai(
@@ -26,67 +95,120 @@ def convert_claude_to_openai(
     # Convert messages
     openai_messages = []
 
-    # Add system message if present
-    if claude_request.system and not (config.strip_image_context and has_image):
-        system_text = ""
-        if isinstance(claude_request.system, str):
-            system_text = claude_request.system
-        elif isinstance(claude_request.system, list):
-            text_parts = []
-            for block in claude_request.system:
-                if hasattr(block, "type") and block.type == Constants.CONTENT_TEXT:
-                    text_parts.append(block.text)
-                elif (
-                    isinstance(block, dict)
-                    and block.get("type") == Constants.CONTENT_TEXT
-                ):
-                    text_parts.append(block.get("text", ""))
-            system_text = "\n\n".join(text_parts)
+    # Special handling for image requests: to avoid blowing the smaller vision
+    # model's context window, send only the latest user turn that carries the
+    # image (plus an optional short system prompt when allowed). The rest of the
+    # conversation stays on the Claude side and resumes with the text model.
+    if has_image:
+        # Optional system message (only when we are not stripping image context)
+        if claude_request.system and not config.strip_image_context:
+            system_text = ""
+            if isinstance(claude_request.system, str):
+                system_text = claude_request.system
+            elif isinstance(claude_request.system, list):
+                text_parts = []
+                for block in claude_request.system:
+                    if hasattr(block, "type") and block.type == Constants.CONTENT_TEXT:
+                        text_parts.append(block.text)
+                    elif (
+                        isinstance(block, dict)
+                        and block.get("type") == Constants.CONTENT_TEXT
+                    ):
+                        text_parts.append(block.get("text", ""))
+                system_text = "\n\n".join(text_parts)
 
-        if system_text.strip():
+            if system_text.strip():
+                openai_messages.append(
+                    {"role": Constants.ROLE_SYSTEM, "content": system_text.strip()}
+                )
+
+        # Find the most recent user message that contains an image and only send that
+        latest_image_msg = None
+        for message in reversed(claude_request.messages):
+            if message.role == Constants.ROLE_USER and model_manager.contains_image_content([message]):
+                latest_image_msg = message
+                break
+
+        if latest_image_msg:
             openai_messages.append(
-                {"role": Constants.ROLE_SYSTEM, "content": system_text.strip()}
+                convert_claude_user_message(latest_image_msg, allow_images=True)
             )
+    else:
+        # Original multi-turn handling for text-only flow
+        # Add system message if present
+        if claude_request.system:
+            system_text = ""
+            if isinstance(claude_request.system, str):
+                system_text = claude_request.system
+            elif isinstance(claude_request.system, list):
+                text_parts = []
+                for block in claude_request.system:
+                    if hasattr(block, "type") and block.type == Constants.CONTENT_TEXT:
+                        text_parts.append(block.text)
+                    elif (
+                        isinstance(block, dict)
+                        and block.get("type") == Constants.CONTENT_TEXT
+                    ):
+                        text_parts.append(block.get("text", ""))
+                system_text = "\n\n".join(text_parts)
 
-    # Process Claude messages
-    i = 0
-    while i < len(claude_request.messages):
-        msg = claude_request.messages[i]
+            if system_text.strip():
+                openai_messages.append(
+                    {"role": Constants.ROLE_SYSTEM, "content": system_text.strip()}
+                )
 
-        if msg.role == Constants.ROLE_USER:
-            openai_message = convert_claude_user_message(msg, allow_images=has_image)
-            openai_messages.append(openai_message)
-        elif msg.role == Constants.ROLE_ASSISTANT:
-            openai_message = convert_claude_assistant_message(msg, allow_tools=allow_tools)
-            openai_messages.append(openai_message)
+        # Process Claude messages
+        i = 0
+        while i < len(claude_request.messages):
+            msg = claude_request.messages[i]
 
-            # Check if next message contains tool results
-            if allow_tools and i + 1 < len(claude_request.messages):
-                next_msg = claude_request.messages[i + 1]
-                if (
-                    next_msg.role == Constants.ROLE_USER
-                    and isinstance(next_msg.content, list)
-                    and any(
-                        block.type == Constants.CONTENT_TOOL_RESULT
-                        for block in next_msg.content
-                        if hasattr(block, "type")
-                    )
-                ):
-                    # Process tool results
-                    i += 1  # Skip to tool result message
-                    tool_results = convert_claude_tool_results(next_msg)
-                    openai_messages.extend(tool_results)
+            if msg.role == Constants.ROLE_USER:
+                openai_message = convert_claude_user_message(msg, allow_images=has_image)
+                openai_messages.append(openai_message)
+            elif msg.role == Constants.ROLE_ASSISTANT:
+                openai_message = convert_claude_assistant_message(msg, allow_tools=allow_tools)
+                openai_messages.append(openai_message)
 
-        i += 1
+                # Check if next message contains tool results
+                if allow_tools and i + 1 < len(claude_request.messages):
+                    next_msg = claude_request.messages[i + 1]
+                    if (
+                        next_msg.role == Constants.ROLE_USER
+                        and isinstance(next_msg.content, list)
+                        and any(
+                            block.type == Constants.CONTENT_TOOL_RESULT
+                            for block in next_msg.content
+                            if hasattr(block, "type")
+                        )
+                    ):
+                        # Process tool results
+                        i += 1  # Skip to tool result message
+                        tool_results = convert_claude_tool_results(next_msg)
+                        openai_messages.extend(tool_results)
+
+            i += 1
 
     # Build OpenAI request
+    # Context trimming + max_tokens guard
+    context_limit = _get_context_limit(openai_model)
+    openai_messages, dropped = _trim_messages_to_fit(openai_messages, context_limit, reserve=2048)
+    if dropped:
+        logger.warning(f"Trimmed {dropped} oldest messages to fit context window for model {openai_model}")
+
+    prompt_estimate = _estimate_prompt_tokens(openai_messages)
+    available = max(context_limit - prompt_estimate - 2048, 1)
+    # Respect client intent; treat MIN_TOKENS_LIMIT as a fallback for missing/invalid
+    # values instead of forcing an oversized floor.
+    requested = claude_request.max_tokens
+    if not isinstance(requested, int) or requested < 1:
+        requested = config.min_tokens_limit
+
+    safe_max_tokens = min(requested, config.max_tokens_limit, available)
+
     openai_request = {
         "model": openai_model,
         "messages": openai_messages,
-        "max_tokens": min(
-            max(claude_request.max_tokens, config.min_tokens_limit),
-            config.max_tokens_limit,
-        ),
+        "max_tokens": safe_max_tokens,
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
     }
@@ -154,27 +276,54 @@ def convert_claude_user_message(msg: ClaudeMessage, *, allow_images: bool) -> Di
     image_blocks = []
     has_image = False
     for block in msg.content:
-        if block.type == Constants.CONTENT_TEXT:
-            text_blocks.append(block.text)
-        elif block.type == Constants.CONTENT_IMAGE and allow_images:
-            # Convert Claude image format to OpenAI format
+        # Normalize block access
+        if isinstance(block, dict):
+            block_type = block.get("type")
+        else:
+            block_type = getattr(block, "type", None)
+
+        # Text blocks
+        if block_type == Constants.CONTENT_TEXT:
+            text_value = (
+                block.get("text")
+                if isinstance(block, dict)
+                else getattr(block, "text", "")
+            )
+            text_blocks.append(text_value or "")
+
+        # Base64 image blocks (Claude style)
+        elif block_type == Constants.CONTENT_IMAGE and allow_images:
+            source = block.get("source") if isinstance(block, dict) else getattr(block, "source", {})
             if (
-                isinstance(block.source, dict)
-                and block.source.get("type") == "base64"
-                and "media_type" in block.source
-                and "data" in block.source
+                isinstance(source, dict)
+                and source.get("type") == "base64"
+                and "media_type" in source
+                and "data" in source
             ):
                 has_image = True
                 image_blocks.append(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:{block.source['media_type']};base64,{block.source['data']}"
+                            "url": f"data:{source['media_type']};base64,{source['data']}"
                         },
                     }
                 )
 
-    if config.strip_image_context and has_image:
+        # Pre-encoded image_url blocks (OpenAI style) - pass through
+        elif block_type == "image_url" and allow_images:
+            image_url_payload = (
+                block.get("image_url")
+                if isinstance(block, dict)
+                else getattr(block, "image_url", None)
+            )
+            if image_url_payload:
+                has_image = True
+                image_blocks.append({"type": "image_url", "image_url": image_url_payload})
+
+    # Always strip/trim when an image is present to protect the vision model context,
+    # regardless of the STRIP_IMAGE_CONTEXT flag. This keeps image hops lightweight.
+    if has_image:
         text_to_keep = ""
         for text in reversed(text_blocks):
             stripped = text.strip()
@@ -186,6 +335,11 @@ def convert_claude_user_message(msg: ClaudeMessage, *, allow_images: bool) -> Di
                 continue
             text_to_keep = text
             break
+
+        MAX_VISION_TEXT_CHARS = 1500
+        if text_to_keep and len(text_to_keep) > MAX_VISION_TEXT_CHARS:
+            text_to_keep = text_to_keep[-MAX_VISION_TEXT_CHARS:]
+
         if text_to_keep:
             openai_content = [{"type": "text", "text": text_to_keep}] + image_blocks
         else:
