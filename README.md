@@ -6,7 +6,6 @@ A specialized proxy server that enables **Claude Code** to work seamlessly with 
 
 > **Important**: This proxy is built exclusively for Nebius token factory. All development, testing, and optimization is focused entirely on Nebius infrastructure.
 
-![Claude Code Proxy](demo.png)
 
 ## Features
 
@@ -40,6 +39,18 @@ The image support has been **successfully tested** with the provided test suite,
 
 ## Quick Start (Nebius Configuration)
 
+### Prerequisites 
+
+- claude-code
+```bash
+brew install --cask claude-code
+```
+- docker (if using with Docker like I do)
+- UV if running with VU
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### 1. Install Dependencies
 
 ```bash
@@ -62,10 +73,10 @@ OPENAI_API_KEY="your-nebius-api-key"
 OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
 
 # Optional: Customize Nebius models (default values provided)
-BIG_MODEL="zai-org/GLM-4.5"
-MIDDLE_MODEL="zai-org/GLM-4.5"
-SMALL_MODEL="zai-org/GLM-4.5"
-VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"
+BIG_MODEL=zai-org/GLM-4.7-FP8
+MIDDLE_MODEL=zai-org/GLM-4.7-FP8
+SMALL_MODEL=zai-org/GLM-4.7-FP8
+VISION_MODEL=Qwen/Qwen2.5-VL-72B-Instruct
 STRIP_IMAGE_CONTEXT=true
 ```
 
@@ -134,109 +145,17 @@ The application automatically loads environment variables from a `.env` file in 
 - `REQUEST_TIMEOUT` - Request timeout in seconds (default: `90`)
 - `MAX_RETRIES` - Retries for transient provider/API failures (default: `2`)
 
-**Custom Headers:**
-
-- `CUSTOM_HEADER_*` - Custom headers for API requests (e.g., `CUSTOM_HEADER_ACCEPT`, `CUSTOM_HEADER_AUTHORIZATION`)
-  - Uncomment in `.env` file to enable custom headers
-
-### Custom Headers Configuration
-
-Add custom headers to your API requests by setting environment variables with the `CUSTOM_HEADER_` prefix:
-
-```bash
-# Uncomment to enable custom headers
-# CUSTOM_HEADER_ACCEPT="application/jsonstream"
-# CUSTOM_HEADER_CONTENT_TYPE="application/json"
-# CUSTOM_HEADER_USER_AGENT="your-app/1.0.0"
-# CUSTOM_HEADER_AUTHORIZATION="Bearer your-token"
-# CUSTOM_HEADER_X_API_KEY="your-api-key"
-# CUSTOM_HEADER_X_CLIENT_ID="your-client-id"
-# CUSTOM_HEADER_X_CLIENT_VERSION="1.0.0"
-# CUSTOM_HEADER_X_REQUEST_ID="unique-request-id"
-# CUSTOM_HEADER_X_TRACE_ID="trace-123"
-# CUSTOM_HEADER_X_SESSION_ID="session-456"
-```
-
-### Header Conversion Rules
-
-Environment variables with the `CUSTOM_HEADER_` prefix are automatically converted to HTTP headers:
-
-- Environment variable: `CUSTOM_HEADER_ACCEPT`
-- HTTP Header: `ACCEPT`
-
-- Environment variable: `CUSTOM_HEADER_X_API_KEY`
-- HTTP Header: `X-API-KEY`
-
-- Environment variable: `CUSTOM_HEADER_AUTHORIZATION`
-- HTTP Header: `AUTHORIZATION`
-
-### Supported Header Types
-
-- **Content Type**: `ACCEPT`, `CONTENT-TYPE`
-- **Authentication**: `AUTHORIZATION`, `X-API-KEY`
-- **Client Identification**: `USER-AGENT`, `X-CLIENT-ID`, `X-CLIENT-VERSION`
-- **Tracking**: `X-REQUEST-ID`, `X-TRACE-ID`, `X-SESSION-ID`
-
-### Usage Example
-
-```bash
-# Basic configuration
-OPENAI_API_KEY="your-nebius-api-key"
-OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
-
-# Enable custom headers (uncomment as needed)
-CUSTOM_HEADER_ACCEPT="application/jsonstream"
-CUSTOM_HEADER_CONTENT_TYPE="application/json"
-CUSTOM_HEADER_USER_AGENT="my-app/1.0.0"
-CUSTOM_HEADER_AUTHORIZATION="Bearer my-token"
-```
-
-The proxy will automatically include these headers in all API requests to the target LLM provider.
-
 ### Model Mapping (Nebius Optimized)
 
 The proxy maps Claude model requests to Nebius-compatible models:
 
 | Claude Request          | Mapped To      | Environment Variable            | Nebius Default                          |
 | ---------------------- | -------------- | ------------------------------ | --------------------------------------- |
-| Models with "haiku"    | `SMALL_MODEL`  | `zai-org/GLM-4.5`              | High-quality text generation            |
-| Models with "sonnet"   | `MIDDLE_MODEL` | `zai-org/GLM-4.5`              | Balanced performance and quality        |
-| Models with "opus"     | `BIG_MODEL`    | `zai-org/GLM-4.5`              | Highest quality, complex reasoning      |
+| Models with "haiku"    | `SMALL_MODEL`  | `zai-org/GLM-4.7-FP8`              | High-quality text generation            |
+| Models with "sonnet"   | `MIDDLE_MODEL` | `zai-org/GLM-4.7-FP8`              | Balanced performance and quality        |
+| Models with "opus"     | `BIG_MODEL`    | `zai-org/GLM-4.7-FP8`              | Highest quality, complex reasoning      |
 | **Requests with images** | `VISION_MODEL` | `Qwen/Qwen2.5-VL-72B-Instruct` | **🆕 Multi-modal vision model**        |
 
-### Provider Examples
-
-#### Nebius Token Factory (Recommended)
-
-```bash
-OPENAI_API_KEY="your-nebius-api-key"
-OPENAI_BASE_URL="https://api.tokenfactory.nebius.com/v1"
-BIG_MODEL="zai-org/GLM-4.5"
-MIDDLE_MODEL="zai-org/GLM-4.5"
-SMALL_MODEL="zai-org/GLM-4.5"
-VISION_MODEL="Qwen/Qwen2.5-VL-72B-Instruct"
-STRIP_IMAGE_CONTEXT=true
-```
-
-
-## Usage Examples
-
-### Basic Chat
-
-```python
-import httpx
-
-response = httpx.post(
-    "http://localhost:8083/v1/messages",
-    json={
-        "model": "claude-3-5-sonnet-20241022",  # Maps to MIDDLE_MODEL
-        "max_tokens": 100,
-        "messages": [
-            {"role": "user", "content": "Hello!"}
-        ]
-    }
-)
-```
 
 ## Integration with Claude Code
 
@@ -247,10 +166,14 @@ This proxy is designed to work seamlessly with Claude Code CLI:
 python start_proxy.py
 
 # Use Claude Code with the proxy
+
+
 ANTHROPIC_BASE_URL=http://localhost:8083 claude
 
 # Or set permanently
-export ANTHROPIC_BASE_URL=http://localhost:8083
+export ANTHROPIC_BASE_URL="http://localhost:8083"
+export ANTHROPIC_API_KEY="claude-local"
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS="65536"
 claude
 ```
 
