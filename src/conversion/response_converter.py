@@ -345,6 +345,7 @@ async def convert_openai_streaming_to_claude_with_cancellation(
                             final_stop_reason = Constants.STOP_END_TURN
                         else:
                             final_stop_reason = Constants.STOP_END_TURN
+                        break
 
     except HTTPException as e:
         # Handle cancellation
