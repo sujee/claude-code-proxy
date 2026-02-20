@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - 8083:8083
-    volumes:
-      - ./.env:/app/.env
