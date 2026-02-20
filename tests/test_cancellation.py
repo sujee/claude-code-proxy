@@ -7,7 +7,18 @@ This script demonstrates how client disconnection cancels ongoing requests.
 import asyncio
 import httpx
 import json
+import os
 import time
+
+if __name__ != "__main__":
+    import pytest
+
+    if os.environ.get("RUN_PROXY_INTEGRATION_TESTS") != "1":
+        pytest.skip(
+            "Integration tests are disabled by default. Set RUN_PROXY_INTEGRATION_TESTS=1 to enable.",
+            allow_module_level=True,
+        )
+    pytestmark = pytest.mark.asyncio
 
 async def test_non_streaming_cancellation():
     """Test cancellation for non-streaming requests."""

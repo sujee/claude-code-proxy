@@ -1,6 +1,17 @@
 import httpx
 import asyncio
+import os
 import time
+
+if __name__ != "__main__":
+    import pytest
+
+    if os.environ.get("RUN_PROXY_INTEGRATION_TESTS") != "1":
+        pytest.skip(
+            "Integration tests are disabled by default. Set RUN_PROXY_INTEGRATION_TESTS=1 to enable.",
+            allow_module_level=True,
+        )
+    pytestmark = pytest.mark.asyncio
 
 async def test_log_rotation():
     # Test the endpoint with large payloads to trigger log rotation
