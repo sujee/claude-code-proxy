@@ -21,6 +21,7 @@ def main():
         print("Optional environment variables:")
         print("  ANTHROPIC_API_KEY - Expected Anthropic API key for client validation")
         print("                      If set, clients must provide this exact API key")
+        print("  IGNORE_CLIENT_API_KEY - Ignore/drop client API key headers (default: true)")
         print(
             f"  OPENAI_BASE_URL - OpenAI-compatible API base URL (default: {config.openai_base_url})"
         )
@@ -60,7 +61,9 @@ def main():
     print(f"   Max Tokens Limit: {config.max_tokens_limit}")
     print(f"   Request Timeout: {config.request_timeout}s")
     print(f"   Server: {config.host}:{config.port}")
-    print(f"   Client API Key Validation: {'Enabled' if config.anthropic_api_key else 'Disabled'}")
+    validation_enabled = bool(config.anthropic_api_key and not config.ignore_client_api_key)
+    print(f"   Client API Key Validation: {'Enabled' if validation_enabled else 'Disabled'}")
+    print(f"   Ignore Client API Key Headers: {'Enabled' if config.ignore_client_api_key else 'Disabled'}")
     print("")
 
     # Parse log level - extract just the first word to handle comments

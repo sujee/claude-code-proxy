@@ -33,6 +33,13 @@ openai_client = OpenAIClient(
 
 async def validate_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
     """Validate the client's API key from either x-api-key header or Authorization header."""
+    # Default behavior for this proxy: drop/ignore any client-supplied API key.
+    # The proxy always uses server-side OPENAI_API_KEY for upstream calls.
+    if config.ignore_client_api_key:
+        if x_api_key or authorization:
+            logger.debug("Client API key header received and ignored by proxy policy")
+        return
+
     client_api_key = None
     
     # Extract API key from headers
@@ -171,7 +178,8 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "openai_api_configured": bool(config.openai_api_key),
         "api_key_valid": config.validate_api_key(),
-        "client_api_key_validation": bool(config.anthropic_api_key),
+        "client_api_key_validation": bool(config.anthropic_api_key and not config.ignore_client_api_key),
+        "client_api_key_ignored": bool(config.ignore_client_api_key),
     }
 
 

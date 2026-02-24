@@ -12,6 +12,9 @@ class Config:
         self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not self.anthropic_api_key:
             print("Warning: ANTHROPIC_API_KEY not set. Client API key validation will be disabled.")
+        self.ignore_client_api_key = os.environ.get(
+            "IGNORE_CLIENT_API_KEY", "true"
+        ).lower() in ("1", "true", "yes")
         
         self.openai_base_url = os.environ.get(
             "OPENAI_BASE_URL", "https://api.tokenfactory.nebius.com/v1"
@@ -68,6 +71,10 @@ class Config:
         
     def validate_client_api_key(self, client_api_key):
         """Validate client's Anthropic API key"""
+        # Default behavior: ignore any client-provided API key and rely on server-side OPENAI_API_KEY
+        if self.ignore_client_api_key:
+            return True
+
         # If no ANTHROPIC_API_KEY is set in environment, skip validation
         if not self.anthropic_api_key:
             return True
