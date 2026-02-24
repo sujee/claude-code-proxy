@@ -96,11 +96,12 @@ docker compose up -d
 ### 4. Use with Claude Code
 
 ```bash
-# If ANTHROPIC_API_KEY is not set in the proxy:
+# Default behavior (IGNORE_CLIENT_API_KEY=true):
+# Client API keys are ignored by the proxy. Any ANTHROPIC_API_KEY value works client-side.
 ANTHROPIC_BASE_URL=http://localhost:8083 ANTHROPIC_API_KEY="any-value" claude
 
-# If ANTHROPIC_API_KEY is set in the proxy:
-ANTHROPIC_BASE_URL=http://localhost:8083 ANTHROPIC_API_KEY="exact-matching-key" claude
+# Optional strict mode:
+# Set IGNORE_CLIENT_API_KEY=false in the proxy, then ANTHROPIC_API_KEY must match exactly.
 ```
 
 ## Configuration
@@ -116,8 +117,9 @@ The application automatically loads environment variables from a `.env` file in 
 **Security:**
 
 - `ANTHROPIC_API_KEY` - Expected Anthropic API key for client validation
-  - If set, clients must provide this exact API key to access the proxy
-  - If not set, any API key will be accepted
+- `IGNORE_CLIENT_API_KEY` - Ignore/drop client-provided API key headers (default: `true`)
+  - When `true`, proxy ignores `x-api-key` / `Authorization` from clients and uses server-side `OPENAI_API_KEY`
+  - When `false`, if `ANTHROPIC_API_KEY` is set, clients must provide exact match
 
 **Model Configuration:**
 
